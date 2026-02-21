@@ -1,5 +1,6 @@
 import os
 import requests
+import uuid
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
@@ -17,6 +18,7 @@ qdrant = QdrantClient(
 collection_name = "books"
 
 
+# --- description を 300文字に整形 ---
 def shorten_description(text: str) -> str:
     if len(text) <= 300:
         return text
@@ -31,6 +33,7 @@ def shorten_description(text: str) -> str:
     return response.choices[0].message.content.strip()
 
 
+# --- Embedding ---
 def embed(text: str):
     response = openai_client.embeddings.create(
         model="text-embedding-3-small",
@@ -39,6 +42,7 @@ def embed(text: str):
     return response.data[0].embedding
 
 
+# --- Google Books API から書籍情報を取得 ---
 def fetch_book(isbn: str):
     api_key = os.getenv("GOOGLE_BOOKS_API_KEY")
     url = (
@@ -60,12 +64,15 @@ def fetch_book(isbn: str):
     }
 
 
+# --- Qdrant に保存 ---
 def save_to_qdrant(isbn, title, author, description, vector):
+    point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, isbn))  # ← UUID に変換（絶対に安全）
+
     qdrant.upsert(
         collection_name=collection_name,
         points=[
             PointStruct(
-                id=str(isbn),   # ← ここを文字列にする
+                id=point_id,
                 vector=vector,
                 payload={
                     "isbn": isbn,
@@ -77,7 +84,11 @@ def save_to_qdrant(isbn, title, author, description, vector):
         ]
     )
 
+
+# --- メイン処理 ---
 def process_book(isbn):
+    isbn = str(isbn)
+
     book = fetch_book(isbn)
     if not book:
         print(f"Not found: {isbn}")
