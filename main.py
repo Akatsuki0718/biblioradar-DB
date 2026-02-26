@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
+from qdrant_client.models import Filter, FieldCondition, MatchValue
 from openai import OpenAI
 import os
 
@@ -30,9 +31,9 @@ def embed(text: str):
 def recommend(query: str):
     vector = embed(query)
 
-    result = qdrant.search(
+    result = qdrant.query_points(
         collection_name=collection_name,
-        query_vector=vector,
+        query=vector,
         limit=5
     )
 
@@ -44,5 +45,5 @@ def recommend(query: str):
             "description": r.payload.get("description"),
             "score": r.score,
         }
-        for r in result
+        for r in result.points
     ]
