@@ -42,25 +42,31 @@ def embed(text: str):
     return response.data[0].embedding
 
 
-# --- Google Books API から書籍情報を取得 ---
-def fetch_book(isbn: str):
-    api_key = os.getenv("GOOGLE_BOOKS_API_KEY")
-    url = (
-        "https://www.googleapis.com/books/v1/volumes"
-        f"?q=isbn:{isbn}&key={api_key}&maxResults=1"
-    )
+import requests
 
+def fetch_book(isbn: str):
+    url = f"https://api.openbd.jp/v1/get?isbn={isbn}"
     data = requests.get(url).json()
 
-    if "items" not in data:
+    if not data or data[0] is None:
         return None
 
-    info = data["items"][0]["volumeInfo"]
+    info = data[0]["summary"]
+
+    title = info.get("title", "")
+    author = info.get("author", "")
+    publisher = info.get("publisher", "")
+    pubdate = info.get("pubdate", "")
+    description = info.get("description", "")
+
+    # summary が無い場合は疑似説明文を作る
+    if not description:
+        description = f"{title}（著者: {author}, 出版社: {publisher}, 出版日: {pubdate}）の書籍情報です。"
 
     return {
-        "title": info.get("title", ""),
-        "author": ", ".join(info.get("authors", [])),
-        "description": info.get("description", "")
+        "title": title,
+        "author": author,
+        "description": description
     }
 
 
