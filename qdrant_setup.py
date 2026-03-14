@@ -22,20 +22,20 @@ collection_name = "books"
 client.recreate_collection(
     collection_name=collection_name,
     vectors_config=VectorParams(
-        size=1536,              # text-embedding-3-small
+        size=1536,
         distance=Distance.COSINE,
         quantization_config=ScalarQuantization(
             scalar=ScalarQuantizationConfig(
-                type=ScalarType.INT8,   # 8bit量子化
+                type=ScalarType.INT8,
                 quantile=0.99,
                 always_ram=False
             )
-        ),
-        hnsw_config=HnswConfig(
-            m=8,                 # ★ 軽量設定
-            ef_construct=64,     # ★ 軽量設定
-            full_scan_threshold=0  # ★ 新しいQdrantでは必須
         )
+    ),
+    hnsw_config=HnswConfig(
+        m=8,
+        ef_construct=64,
+        full_scan_threshold=0
     )
 )
 
