@@ -4,9 +4,7 @@ from qdrant_client.models import (
     Distance,
     ScalarQuantization,
     ScalarQuantizationConfig,
-    ScalarType,
-    OptimizersConfigDiff,
-    HnswConfigDiff
+    ScalarType
 )
 import os
 from dotenv import load_dotenv
@@ -20,7 +18,12 @@ client = QdrantClient(
 
 collection_name = "books"
 
-client.recreate_collection(
+# 既存コレクション削除
+if client.collection_exists(collection_name):
+    client.delete_collection(collection_name)
+
+# 新規作成（HNSW設定なし → クラウド側のデフォルトが使われる）
+client.create_collection(
     collection_name=collection_name,
     vectors_config=VectorParams(
         size=1536,
@@ -32,20 +35,7 @@ client.recreate_collection(
                 always_ram=False
             )
         )
-    ),
-    optimizers_config=OptimizersConfigDiff(
-        default_segment_number=1,
-        indexing_threshold=0,
-        memmap_threshold=0,
-        indexing_interval=100,
-        flush_interval_sec=30,
-        max_segment_size=100000,
-        hnsw_config=HnswConfigDiff(
-            m=8,
-            ef_construct=64,
-            full_scan_threshold=0
-        )
     )
 )
 
-print("Qdrant collection created with INT8 quantization + lightweight HNSW!")
+print("Qdrant collection created with INT8 quantization (HNSW = cloud default)")
