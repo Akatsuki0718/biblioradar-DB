@@ -4,7 +4,8 @@ from qdrant_client.models import (
     Distance,
     ScalarQuantization,
     ScalarQuantizationConfig,
-    ScalarType
+    ScalarType,
+    HnswConfig
 )
 import os
 from dotenv import load_dotenv
@@ -29,8 +30,12 @@ client.recreate_collection(
                 quantile=0.99,
                 always_ram=False        # 無料枠では False が安全
             )
+        ),
+        hnsw_config=HnswConfig(
+            m=8,               # ★ 軽量設定
+            ef_construct=64    # ★ 軽量設定
         )
     )
 )
 
-print("Qdrant collection created with INT8 quantization!")
+print("Qdrant collection created with INT8 quantization + lightweight HNSW!")
