@@ -5,7 +5,8 @@ from qdrant_client.models import (
     ScalarQuantization,
     ScalarQuantizationConfig,
     ScalarType,
-    HnswConfig
+    OptimizersConfigDiff,
+    HnswConfigDiff
 )
 import os
 from dotenv import load_dotenv
@@ -32,10 +33,18 @@ client.recreate_collection(
             )
         )
     ),
-    hnsw_config=HnswConfig(
-        m=8,
-        ef_construct=64,
-        full_scan_threshold=0
+    optimizers_config=OptimizersConfigDiff(
+        default_segment_number=1,
+        indexing_threshold=0,
+        memmap_threshold=0,
+        indexing_interval=100,
+        flush_interval_sec=30,
+        max_segment_size=100000,
+        hnsw_config=HnswConfigDiff(
+            m=8,
+            ef_construct=64,
+            full_scan_threshold=0
+        )
     )
 )
 
