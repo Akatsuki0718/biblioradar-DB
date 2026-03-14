@@ -107,7 +107,7 @@ if __name__ == "__main__":
 
     for isbn in isbns:
 
-        if not isbn.startswith("9384"):
+        if not isbn.startswith("9784"):
             continue
 
         if isbn in processed:
