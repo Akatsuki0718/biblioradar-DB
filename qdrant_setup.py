@@ -28,12 +28,13 @@ client.recreate_collection(
             scalar=ScalarQuantizationConfig(
                 type=ScalarType.INT8,   # 8bit量子化
                 quantile=0.99,
-                always_ram=False        # 無料枠では False が安全
+                always_ram=False
             )
         ),
         hnsw_config=HnswConfig(
-            m=8,               # ★ 軽量設定
-            ef_construct=64    # ★ 軽量設定
+            m=8,                 # ★ 軽量設定
+            ef_construct=64,     # ★ 軽量設定
+            full_scan_threshold=0  # ★ 新しいQdrantでは必須
         )
     )
 )
