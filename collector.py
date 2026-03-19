@@ -1,19 +1,15 @@
 import requests
-import time
 import os
+import time
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
-import openai
+from openai import OpenAI
 
-# -------------------------
-# .env 読み込み
-# -------------------------
 load_dotenv()
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Qdrant クライアント
 qdrant = QdrantClient(
     url=os.getenv("QDRANT_URL"),
     api_key=os.getenv("QDRANT_API_KEY")
@@ -22,105 +18,113 @@ qdrant = QdrantClient(
 PROCESSED_FILE = "processed_isbns.txt"
 LOG_FILE = "collector.log"
 
-# -------------------------
-# ログ出力
-# -------------------------
-def log(message):
+def log(msg: str):
     with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(message + "\n")
-    print(message)
+        f.write(msg + "\n")
+    print(msg)
 
-# -------------------------
-# 処理済みISBNの読み込み
-# -------------------------
 def load_processed():
     if not os.path.exists(PROCESSED_FILE):
         return set()
     with open(PROCESSED_FILE, "r", encoding="utf-8") as f:
         return set(line.strip() for line in f)
 
-# -------------------------
-# 処理済みISBNの保存
-# -------------------------
-def save_processed(isbn):
+def save_processed(isbn: str):
     with open(PROCESSED_FILE, "a", encoding="utf-8") as f:
         f.write(isbn + "\n")
 
-# -------------------------
-# openBD から ISBN リスト取得
-# -------------------------
 def fetch_isbn_list():
     url = "https://api.openbd.jp/v1/coverage"
     return requests.get(url).json()
 
-# -------------------------
-# 1冊の処理
-# -------------------------
-def process_book(isbn):
-    # --- openBD から書誌情報取得 ---
+def get_book_data(isbn: str):
     url = f"https://api.openbd.jp/v1/get?isbn={isbn}"
     data = requests.get(url).json()
-
     if not data or data[0] is None:
-        return
+        return None
 
     summary = data[0]["summary"]
     title = summary.get("title", "")
     author = summary.get("author", "")
     publisher = summary.get("publisher", "")
+    description = summary.get("description", "")
 
-    # --- 埋め込み生成 ---
-    text = f"{title}\n{author}\n{publisher}"
-    embedding = openai.embeddings.create(
+    return {
+        "isbn": isbn,
+        "title": title,
+        "author": author,
+        "publisher": publisher,
+        "summary": description
+    }
+
+def generate_summary_if_needed(book):
+    if book["summary"]:
+        return book["summary"]
+
+    prompt = f"次の本のタイトルと著者から、内容を想像して日本語で200文字程度の要約を書いてください。\n\nタイトル: {book['title']}\n著者: {book['author']}"
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "あなたは日本語の本の要約を作るアシスタントです。"},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    return resp.choices[0].message.content.strip()
+
+def embed(text: str):
+    resp = client.embeddings.create(
         model="text-embedding-3-small",
         input=text
-    ).data[0].embedding
+    )
+    return resp.data[0].embedding
 
-    # --- Qdrant に保存 ---
+def process_book(isbn: str):
+    book = get_book_data(isbn)
+    if not book or not book["title"]:
+        log(f"[SKIP] 書誌情報なし: {isbn}")
+        return
+
+    summary_text = generate_summary_if_needed(book)
+    book["summary"] = summary_text
+
+    title_text = f"{book['title']}\n{book['author']}\n{book['publisher']}"
+    title_vec = embed(title_text)
+    summary_vec = embed(summary_text)
+
     qdrant.upsert(
         collection_name="books",
         points=[
             PointStruct(
                 id=int(isbn[-9:], 10),
-                vector=embedding,
-                payload={
-                    "isbn": isbn,
-                    "title": title,
-                    "author": author,
-                    "publisher": publisher
-                }
+                vector={
+                    "title_vector": title_vec,
+                    "summary_vector": summary_vec
+                },
+                payload=book
             )
         ]
     )
+    log(f"[OK] {isbn} {book['title']}")
 
-# -------------------------
-# メイン処理
-# -------------------------
 if __name__ == "__main__":
-    log("=== Collector started ===")
-
+    log("=== New Collector started ===")
     processed = load_processed()
     isbns = fetch_isbn_list()
 
-    log(f"Total ISBNs from openBD: {len(isbns)}")
-    log(f"Already processed: {len(processed)}")
-
     for isbn in isbns:
-
+        if len(isbn) != 13 or not isbn.isdigit():
+            continue
         if not isbn.startswith("9784"):
             continue
-
         if isbn in processed:
             continue
 
         try:
             process_book(isbn)
             save_processed(isbn)
-            log(f"SUCCESS: {isbn}")
-
         except Exception as e:
-            log(f"ERROR: {isbn} - {e}")
+            log(f"[ERROR] {isbn} - {e}")
 
-        time.sleep(1.5)
+        time.sleep(1.0)
 
-    log("=== Collector finished ===")
+    log("=== New Collector finished ===")
